@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GET TAXI KOVAI - Official Invoice System</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <style>
+        :root { --primary: #1e63b6; --soft: #e3f2fd; --gray: #666; --dark: #222; --accent: #ffcc00; }
+        body { background: #eef2f7; font-family: 'Segoe UI', Arial, sans-serif; margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; }
+        
+        /* Control Panel */
+        .controls { width: 210mm; background: white; padding: 25px; margin-bottom: 20px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; position: relative; }
+        .controls h3 { grid-column: span 4; margin: 10px 0 5px; font-size: 14px; color: var(--primary); text-transform: uppercase; border-bottom: 1px solid #eee; padding-bottom: 5px; }
+        .input-group { display: flex; flex-direction: column; gap: 5px; }
+        .input-group label { font-size: 12px; font-weight: bold; color: var(--primary); }
+        .controls input, .controls select { padding: 10px; border: 1px solid #dfe6e9; border-radius: 6px; font-size: 13px; width: 100%; box-sizing: border-box; }
+        
+        .menu-dots { position: absolute; top: 20px; right: 20px; cursor: pointer; font-size: 24px; color: var(--gray); z-index: 10; }
+        .history-panel { display: none; position: absolute; top: 55px; right: 20px; width: 350px; background: white; border: 1px solid #ddd; box-shadow: 0 10px 30px rgba(0,0,0,0.2); border-radius: 10px; z-index: 100; max-height: 500px; overflow-y: auto; padding: 15px; }
+        .history-item { padding: 10px; border-bottom: 1px solid #eee; font-size: 12px; display: flex; justify-content: space-between; align-items: center; }
+
+        .btn-download { background: var(--primary); color: white; border: none; padding: 15px 60px; font-size: 18px; border-radius: 8px; cursor: pointer; margin-bottom: 30px; font-weight: bold; }
+
+        /* Preview Area */
+        #invoice-container { width: 210mm; }
+        .page { width: 210mm; height: 297mm; background: white; padding: 18mm; margin-bottom: 20px; box-sizing: border-box; position: relative; box-shadow: 0 0 20px rgba(0,0,0,0.1); overflow: hidden; }
+
+        .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; border-bottom: 3px solid var(--primary); padding-bottom: 15px; }
+        .trip-date-top { font-size: 13px; color: var(--gray); font-weight: bold; padding-top: 10px; }
+        .logo-img { height: 75px; width: auto; }
+        .brand-name { font-size: 28px; font-weight: 800; color: var(--primary); margin: 0; text-align: right; }
+        
+        .hero-price { text-align: center; margin: 25px 0; border-bottom: 1px solid #eee; padding-bottom: 20px; }
+        .hero-price h1 { font-size: 50px; margin: 0; color: var(--dark); font-weight: 500; }
+
+        .main-grid { display: grid; grid-template-columns: 1fr 1.2fr; gap: 30px; }
+        .section-label { font-size: 12px; font-weight: bold; color: var(--primary); text-transform: uppercase; border-bottom: 1px solid #eee; padding-bottom: 5px; margin-bottom: 15px; text-align: center; background: #f0f7ff; }
+
+        .map-box { width: 100%; max-width: 180px; height: 120px; margin: 0 auto 10px; border: 1px solid #ddd; overflow: hidden; border-radius: 4px; }
+        .map-box img { width: 100%; height: 100%; object-fit: cover; }
+
+        .km-summary-box { background: #f9f9f9; padding: 10px; border-radius: 6px; border: 1px solid #eee; margin: 15px 0; }
+        .km-row { display: flex; justify-content: space-around; font-size: 12px; text-align: center; }
+        .km-row b { display: block; font-size: 14px; color: var(--primary); }
+
+        .bill-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+        .bill-table td { padding: 10px 0; color: var(--gray); }
+        .bill-table td.amt { text-align: right; color: #000; font-weight: 500; }
+        .grand-total { border-top: 2.5px solid var(--primary); font-weight: bold; font-size: 20px; color: var(--primary) !important; }
+
+        /* Markers & Timeline */
+        .timeline { margin-top: 15px; font-size: 13px; }
+        .timeline-row { display: flex; align-items: flex-start; margin-bottom: 12px; gap: 10px; }
+        .marker-dot { width: 10px; height: 10px; border-radius: 50%; margin-top: 4px; flex-shrink: 0; }
+        .dot-pickup { background: #4CAF50; border: 2px solid #e8f5e9; }
+        .dot-drop { background: #F44336; border: 2px solid #ffebee; }
+        .loc-text { font-size: 15px; font-weight: 600; color: var(--dark); line-height: 1.3; }
+        .time-sub { font-size: 12px; color: var(--gray); font-weight: normal; }
+
+        .payment-label { text-align: center; color: var(--gray); font-size: 12px; margin-bottom: 5px; margin-top: 30px; text-transform: uppercase; letter-spacing: 1px; }
+        .payment-status { text-align: center; padding: 15px; background: var(--soft); color: var(--primary); font-size: 18px; font-weight: bold; border-radius: 8px; border: 1px solid #bbdefb; }
+        
+        .footer { position: absolute; bottom: 0; left: 0; right: 0; text-align: center; font-size: 11px; padding: 15px; background: var(--primary); color: white; line-height: 1.6; }
+
+        /* Page 2 Details */
+        .p2-header-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin: 15px 0; border: 1px solid #eee; padding: 15px; font-size: 13px; line-height: 1.6; }
+        .inv-bar { display: flex; justify-content: space-between; border-bottom: 1px solid #000; border-top: 1px solid #000; padding: 8px 0; margin-bottom: 15px; font-size: 13px; }
+
+        .paid-stamp-p2 {
+            display: inline-block;
+            border: 3px double #27ae60;
+            color: #27ae60;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 24px;
+            font-weight: bold;
+            padding: 4px 12px;
+            text-transform: uppercase;
+            transform: rotate(-10deg);
+            margin-top: 15px;
+            opacity: 0.8;
+            border-radius: 4px;
+        }
+
+        @media print { .controls, .btn-download { display: none; } }
+    </style>
+</head>
+<body>
+
+    <div class="controls">
+        <div class="menu-dots" onclick="toggleHistory()">⋮</div>
+        <div class="history-panel" id="historyPanel"><h4>Billed List History</h4><div id="historyList">No bills.</div></div>
+
+        <h3>1. Smart Memory Selection</h3>
+        <div class="input-group"><label>Customer List</label><select id="selCust" onchange="applyData('cust', this.value)"><option value="">Select Saved</option></select></div>
+        <div class="input-group"><label>Driver List</label><select id="selDrv" onchange="applyData('drv', this.value)"><option value="">Select Saved</option></select></div>
+        <div class="input-group"><label>Vehicle List</label><select id="selVeh" onchange="applyData('veh', this.value)"><option value="">Select Saved</option></select></div>
+        <div class="input-group"><label>Invoice ID Start</label><input type="text" id="nextInv" value="01001" oninput="update()"></div>
+
+        <h3>2. Trip & Customer</h3>
+        <div class="input-group"><label>Trip Date (Page 1 Top)</label><input type="date" id="in_tripDate" oninput="update()"></div>
+        <div class="input-group"><label>Invoice Date (Page 2)</label><input type="date" id="in_invDate" oninput="update()"></div>
+        <div class="input-group"><label>Pickup Date & Time</label><input type="datetime-local" id="in_pTime" oninput="update()"></div>
+        <div class="input-group"><label>Drop Date & Time</label><input type="datetime-local" id="in_dTime" oninput="update()"></div>
+        <input type="text" id="in_cust" placeholder="Customer Name" oninput="update()">
+        <input type="text" id="in_mobile" placeholder="Mobile Number" oninput="update()">
+        <input type="text" id="in_pLoc" placeholder="Pickup Address" oninput="update()">
+        <input type="text" id="in_dLoc" placeholder="Drop Address" oninput="update()">
+
+        <h3>3. Driver & Vehicle</h3>
+        <input type="text" id="in_driver" placeholder="Driver Name" oninput="update()">
+        <input type="text" id="in_vModel" placeholder="Vehicle Model" oninput="update()">
+        <input type="text" id="in_vNum" placeholder="Vehicle Number" oninput="update()">
+        <input type="file" onchange="loadMap(event)">
+
+        <h3>4. KM & Charges</h3>
+        <input type="number" id="in_okm" placeholder="Opening KM" oninput="update()">
+        <input type="number" id="in_ckm" placeholder="Closing KM" oninput="update()">
+        <input type="number" id="in_fare" placeholder="Fare" oninput="update()">
+        <input type="number" id="in_toll" placeholder="Toll" oninput="update()">
+        <input type="number" id="in_park" placeholder="Parking" oninput="update()">
+        <input type="number" id="in_air" placeholder="Airport" oninput="update()">
+    </div>
+
+    <button class="btn-download" onclick="downloadPDF()">Download Official Invoice</button>
+
+    <div id="invoice-container">
+        <div class="page" id="page1">
+            <div class="header">
+                <div class="trip-date-top" id="out_tripDate1">-- --- 2026</div>
+                <div style="display:flex; align-items:center; gap:20px;">
+                    <div style="text-align:right;">
+                        <div class="brand-name">GET TAXI KOVAI</div>
+                        <div style="font-size:11px; color:var(--gray); font-style:italic;">Redefining Comfort...</div>
+                    </div>
+                    <img src="logo.png" class="logo-img" alt="Logo">
+                </div>
+            </div>
+            <div class="hero-price">
+                <h1>₹ <span class="out_total">0</span></h1>
+                <p>Thanks for travelling with us, <strong id="out_cust1">Customer</strong></p>
+                <div style="font-size:13px; color:#666;" id="out_mobile1"></div>
+            </div>
+            <div class="main-grid">
+                <div class="left-col">
+                    <div class="section-label">Ride Details</div>
+                    <div class="map-box"><img id="mapPreview" src="https://via.placeholder.com/180x120?text=Map"></div>
+                    <div class="km-summary-box"><div class="km-row"><div>Opening<b id="out_okm1">0</b></div><div>Closing<b id="out_ckm1">0</b></div><div>Total KM<b id="out_tkm" style="color:#d32f2f;">0</b></div></div></div>
+                    <div style="font-size:14px; margin-bottom:10px;">Driver: <strong id="out_driver1">--</strong></div>
+                    <div class="timeline">
+                        <div class="timeline-row">
+                            <div class="marker-dot dot-pickup"></div>
+                            <div class="loc-text"><span id="out_pLoc1">Pickup</span><br><span class="time-sub" id="out_pTime1">--:--</span></div>
+                        </div>
+                        <div class="timeline-row">
+                            <div class="marker-dot dot-drop"></div>
+                            <div class="loc-text"><span id="out_dLoc1">Drop</span><br><span class="time-sub" id="out_dTime1">--:--</span></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="right-col">
+                    <div class="section-label">Bill Details</div>
+                    <table class="bill-table">
+                        <tr><td>Trip Fare</td><td class="amt">₹ <span id="out_fare1">0.00</span></td></tr>
+                        <tr><td>Toll Convenience fee</td><td class="amt">₹ <span id="out_toll1">0.00</span></td></tr>
+                        <tr><td>Parking Charges</td><td class="amt">₹ <span id="out_park1">0.00</span></td></tr>
+                        <tr><td>Airport Charges</td><td class="amt">₹ <span id="out_air1">0.00</span></td></tr>
+                        <tr class="grand-total"><td>Total Bill</td><td class="amt">₹ <span class="out_total">0</span></td></tr>
+                    </table>
+                </div>
+            </div>
+            <div class="payment-label">Payment</div>
+            <div class="payment-status">Paid by UPI: ₹ <span class="out_total">0</span></div>
+            <div class="footer">
+                <strong>GET TAXI KOVAI</strong> | No 286, D.B.Road, RS Puram, Coimbatore - 641002 <br>
+                📧 bookings@gettaxikovai.in | 🌐 www.gettaxikovai.in | 📞 +91 90437 43777
+            </div>
+        </div>
+
+        <div class="page" id="page2">
+            <div style="text-align:center; font-size:10px; margin-bottom:5px;">Original Tax Invoice</div>
+            <h1 style="border-bottom:3px solid var(--primary); padding-bottom:5px; color:var(--primary); font-size:32px;">Driver Trip Invoice</h1>
+            
+            <div style="display:flex; justify-content:space-between; margin:15px 0; font-size:13px;">
+                <div><strong id="out_driver2">--</strong><br><span id="out_vModel2">Model</span><br><span id="out_vNum2">Number</span></div>
+                <div style="text-align:right;">Service Tax Category: <b>Renting of Cab</b></div>
+            </div>
+
+            <div class="inv-bar">
+                <span>Invoice ID: <b id="out_invID">GTK 01001</b></span>
+                <span>Invoice Date: <b id="out_invDate">--</b></span>
+            </div>
+
+            <div style="padding:15px; border:1px solid #eee; margin-bottom:15px; font-size:13px;">
+                Customer Name: <strong id="out_cust2">--</strong><br>
+                Mobile Number: <span id="out_mobile2">--</span>
+            </div>
+
+            <table style="width:100%; border-collapse:collapse; font-size:13px;">
+                <tr style="background:#f4f4f4; border-bottom:2px solid #222; font-weight:bold;">
+                    <td style="padding:10px;">Description</td><td style="text-align:right; padding:10px;">Amount (₹)</td>
+                </tr>
+                <tr><td style="padding:10px; border-bottom:1px solid #eee;">Ride Fee</td><td style="text-align:right;" id="out_fare2">0.00</td></tr>
+                <tr><td style="padding:10px; border-bottom:1px solid #eee;">Toll Convenience fee</td><td style="text-align:right;" id="out_toll2">0.00</td></tr>
+                <tr><td style="padding:10px; border-bottom:1px solid #eee;">Airport Charges</td><td style="text-align:right;" id="out_air2">0.00</td></tr>
+                <tr><td style="padding:10px; border-bottom:1px solid #eee;">Parking Charges</td><td style="text-align:right;" id="out_park2">0.00</td></tr>
+                <tr><td style="padding:10px;">CGST (0%)</td><td style="text-align:right;">0.00</td></tr>
+                <tr><td style="padding:10px; border-bottom:1px solid #eee;">SGST (0%)</td><td style="text-align:right;">0.00</td></tr>
+                <tr style="font-weight:bold; font-size:20px; color:var(--primary);">
+                    <td style="padding:10px;">Total Customer Ride Fare</td><td style="text-align:right;">₹ <span class="out_total">0</span></td>
+                </tr>
+            </table>
+            <div class="paid-stamp-p2">PAID</div>
+
+            <div style="margin-top:50px; font-size:10px; color:#777;">1. Invoice issued on behalf of Service Provider. 2. Electronic document, no signature needed.</div>
+        </div>
+    </div>
+
+    <script>
+        const STORE = { c: 'g_c', d: 'g_d', v: 'g_v', b: 'g_b', inv: 'g_inv' };
+        let db = { 
+            c: JSON.parse(localStorage.getItem(STORE.c)) || [], d: JSON.parse(localStorage.getItem(STORE.d)) || [], 
+            v: JSON.parse(localStorage.getItem(STORE.v)) || [], b: JSON.parse(localStorage.getItem(STORE.b)) || []
+        };
+        let lastInv = localStorage.getItem(STORE.inv) || "01001";
+        document.getElementById('nextInv').value = lastInv;
+        document.getElementById('in_invDate').valueAsDate = new Date();
+
+        function update() {
+            const f = parseFloat(document.getElementById('in_fare').value) || 0;
+            const t = parseFloat(document.getElementById('in_toll').value) || 0;
+            const p = parseFloat(document.getElementById('in_park').value) || 0;
+            const a = parseFloat(document.getElementById('in_air').value) || 0;
+            const okm = parseFloat(document.getElementById('in_okm').value) || 0;
+            const ckm = parseFloat(document.getElementById('in_ckm').value) || 0;
+            const total = (f+t+p+a).toFixed(0);
+            
+            document.getElementById('out_tkm').innerText = (ckm > okm) ? (ckm - okm) : 0;
+            document.getElementById('out_invID').innerText = "GTK " + document.getElementById('nextInv').value;
+            
+            const invDateInput = document.getElementById('in_invDate').value;
+            document.getElementById('out_invDate').innerText = invDateInput ? new Date(invDateInput).toLocaleDateString('en-GB') : '--';
+
+            const map = { 'out_cust1': 'in_cust', 'out_cust2': 'in_cust', 'out_mobile1': 'in_mobile', 'out_mobile2': 'in_mobile', 'out_driver1': 'in_driver', 'out_driver2': 'in_driver', 'out_vModel2': 'in_vModel', 'out_vNum2': 'in_vNum', 'out_pLoc1': 'in_pLoc', 'out_dLoc1': 'in_dLoc' };
+            for(let out in map) {
+                const el = document.getElementById(out);
+                if(el) el.innerText = document.getElementById(map[out]).value || '--';
+            }
+
+            const tripD = document.getElementById('in_tripDate').value;
+            document.getElementById('out_tripDate1').innerText = tripD ? new Date(tripD).toLocaleDateString('en-GB', {day:'numeric', month:'short', year:'numeric'}) : '-- --- 2026';
+
+            const formatFullDT = (id) => {
+                const val = document.getElementById(id).value;
+                if(!val) return "--:--";
+                const d = new Date(val);
+                const dateP = d.toLocaleDateString('en-GB', {day:'numeric', month:'short'});
+                const timeP = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
+                return dateP + " " + timeP;
+            };
+            document.getElementById('out_pTime1').innerText = formatFullDT('in_pTime');
+            document.getElementById('out_dTime1').innerText = formatFullDT('in_dTime');
+
+            document.getElementById('out_fare1').innerText = f.toFixed(2); document.getElementById('out_fare2').innerText = f.toFixed(2);
+            document.getElementById('out_toll1').innerText = t.toFixed(2); document.getElementById('out_toll2').innerText = t.toFixed(2);
+            document.getElementById('out_park1').innerText = p.toFixed(2); document.getElementById('out_park2').innerText = p.toFixed(2);
+            document.getElementById('out_air1').innerText = a.toFixed(2); document.getElementById('out_air2').innerText = a.toFixed(2);
+            document.getElementById('out_okm1').innerText = okm; document.getElementById('out_ckm1').innerText = ckm;
+            document.querySelectorAll('.out_total').forEach(el => el.innerText = total);
+        }
+
+        function toggleHistory() { const p = document.getElementById('historyPanel'); p.style.display = p.style.display === 'block' ? 'none' : 'block'; renderDB(); }
+        function renderDB() {
+            const h = document.getElementById('historyList'); h.innerHTML = db.b.length ? '' : 'No history.';
+            db.b.slice(-10).reverse().forEach((bill, i) => {
+                h.innerHTML += `<div class="history-item"><b>${bill.d.in_cust}</b><button onclick="copyBill(${db.b.length-1-i})" style="padding:4px; font-size:10px;">Copy</button></div>`;
+            });
+            const fill = (id, arr) => { const s = document.getElementById(id); s.innerHTML = '<option value="">Saved</option>'; arr.forEach((v, idx) => s.innerHTML += `<option value="${idx}">${v.name || v.val || v.num}</option>`); };
+            fill('selCust', db.c); fill('selDrv', db.d); fill('selVeh', db.v);
+        }
+        function applyData(type, idx) {
+            if(idx === "") return; const d = db[type === 'cust' ? 'c' : type === 'drv' ? 'd' : 'v'][idx];
+            if(type==='cust') { document.getElementById('in_cust').value = d.name; document.getElementById('in_mobile').value = d.mobile; document.getElementById('in_pLoc').value = d.addr; }
+            if(type==='drv') document.getElementById('in_driver').value = d.val;
+            if(type==='veh') { document.getElementById('in_vModel').value = d.model; document.getElementById('in_vNum').value = d.num; }
+            update();
+        }
+        function copyBill(idx) { const data = db.b[idx].d; for(let k in data) if(document.getElementById(k)) document.getElementById(k).value = data[k]; toggleHistory(); update(); }
+        function loadMap(e) { if(e.target.files[0]) document.getElementById('mapPreview').src = URL.createObjectURL(e.target.files[0]); }
+
+        async function downloadPDF() {
+            const c = document.getElementById('in_cust').value; const m = document.getElementById('in_mobile').value; const dr = document.getElementById('in_driver').value; const vn = document.getElementById('in_vNum').value;
+            if(!c) { alert("Enter Name"); return; }
+            if(!db.c.find(x => x.mobile === m)) db.c.push({name:c, mobile:m, addr: document.getElementById('in_pLoc').value});
+            if(!db.d.find(x => x.val === dr)) db.d.push({val:dr});
+            if(!db.v.find(x => x.num === vn)) db.v.push({model:document.getElementById('in_vModel').value, num:vn});
+            const fd = {}; document.querySelectorAll('.controls input').forEach(i => fd[i.id] = i.value);
+            db.b.push({ts: new Date().toLocaleString(), d: fd});
+            
+            let curVal = parseInt(document.getElementById('nextInv').value);
+            let nextVal = (curVal + 1).toString().padStart(5, '0');
+            document.getElementById('nextInv').value = nextVal;
+            localStorage.setItem(STORE.inv, nextVal);
+            
+            for(let k in db) localStorage.setItem(STORE[k], JSON.stringify(db[k]));
+            const { jsPDF } = window.jspdf; const pdf = new jsPDF('p', 'mm', 'a4');
+            const c1 = await html2canvas(document.getElementById("page1"), { scale: 3 });
+            pdf.addImage(c1.toDataURL("image/jpeg", 0.8), 'JPEG', 0, 0, 210, 297);
+            pdf.addPage();
+            const c2 = await html2canvas(document.getElementById("page2"), { scale: 3 });
+            pdf.addImage(c2.toDataURL("image/jpeg", 0.8), 'JPEG', 0, 0, 210, 297);
+            pdf.save(`GTK_Invoice_${c}.pdf`); renderDB();
+        }
+        update();
+        renderDB();
+    </script>
+</body>
+</html>
